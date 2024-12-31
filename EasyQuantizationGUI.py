@@ -141,8 +141,9 @@ def run_llama_quantize():
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
-
-        process = subprocess.Popen(["python", convert_py_path, "--src", input_file, "--dst", temp_gguf_file], 
+        
+        pythonpath = os.path.join(os.path.dirname(sys.executable), "python.exe")
+        process = subprocess.Popen([f"{pythonpath}", convert_py_path, "--src", input_file, "--dst", temp_gguf_file], 
                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, 
                                    bufsize=1, universal_newlines=True, startupinfo=startupinfo)
         
