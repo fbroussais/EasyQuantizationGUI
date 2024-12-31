@@ -5,10 +5,9 @@
 ```bat
 git clone https://github.com/rainlizard/EasyQuantizationGUI.git
 cd .\EasyQuantizationGUI\
-D:\apps\dev\Python311\Scripts\virtualenv venv
+<your base python 3.11 path>\Scripts\virtualenv venv
 .\venv\Scripts\activate
 pip install -r .\requirements.txt
-pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu124
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
