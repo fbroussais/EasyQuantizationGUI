@@ -129,6 +129,25 @@ def run_llama_quantize():
     # temp_gguf_file = os.path.join(output_dir, "temporary_file_during_quantization")
     temp_gguf_file = input_file + "_temp.gguf"
 
+    if DELETE_TEMPORARY_FILES and temp_gguf_file != input_file :
+        try:
+            os.remove(temp_gguf_file)
+            process_text.insert(tk.END, "Cleaned up existing temporary file.\n")
+            process_text.see(tk.END)
+            root.update()
+        except Exception as e:
+            process_text.insert(tk.END, f"Error cleaning up temporary file: {e}\n")
+            process_text.see(tk.END)
+            root.update()
+            enable_ui()
+            return
+
+    # Add cleanup of existing temp file
+    if os.path.exists(temp_gguf_file):
+        process_text.insert(tk.END, "Reusing previous temporary quantization process...\n")
+        process_text.see(tk.END)
+        convert_to_gguf = False
+
     _, fext = os.path.splitext(input_file)
     if fext.lower() == ".gguf":
         process_text.insert(tk.END, "File is already a GGUF, no conversion needed.\n")
@@ -136,23 +155,6 @@ def run_llama_quantize():
         temp_gguf_file = input_file
         convert_to_gguf = False
 
-    # Add cleanup of existing temp file
-    if os.path.exists(temp_gguf_file):
-        # try:
-        #     os.remove(temp_gguf_file)
-        #     process_text.insert(tk.END, "Cleaned up existing temporary file.\n")
-        #     process_text.see(tk.END)
-        #     root.update()
-        # except Exception as e:
-        #     process_text.insert(tk.END, f"Error cleaning up temporary file: {e}\n")
-        #     process_text.see(tk.END)
-        #     root.update()
-        #     enable_ui()
-        #     return
-        process_text.insert(tk.END, "Reusing previous temporary quantization process...\n")
-        process_text.see(tk.END)
-        convert_to_gguf = False
-    
     if convert_to_gguf:
         try:
             startupinfo = subprocess.STARTUPINFO()
@@ -185,7 +187,7 @@ def run_llama_quantize():
 
     # Quantize the converted file
     llama_quantize_path = resource_path("llama-quantize.exe", "llamacpp-flux")
-    # If not found, search llama-qantuize.exe in PATH (but will probablynot work for Flux models)
+    # If not found, search llama-qantuize.exe in PATH (but will probably not work for Flux models)
     if not os.path.exists(llama_quantize_path):
         llama_quantize_path=shutil.which('llama-quantize')
 
