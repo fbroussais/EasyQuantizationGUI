@@ -116,3 +116,5 @@ creds
 .sqlite
 oscommand_kvdb.sqlite
 oscommand_kvdb.sqlite
+
+.codegpt

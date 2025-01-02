@@ -20,11 +20,13 @@ import shutil
 import winsound
 import tkinter.scrolledtext as scrolledtext
 
+DELETE_TEMPORARY_FILES = False
+
 def scroll_entry_to_end(entry):
     entry.xview_moveto(1)
 
 def browse_file(entry):
-    file_path = filedialog.askopenfilename(filetypes=[("Model files", "*.safetensors *.sft")])
+    file_path = filedialog.askopenfilename(filetypes=[("Model files", "*.safetensors *.sft *.gguf")])
     if file_path:
         file_path = file_path.replace('\\', '/')  # Ensure forward slashes
         entry.delete(0, tk.END)
@@ -39,7 +41,9 @@ def suggest_output_file():
         input_dir = os.path.dirname(input_file)
         input_filename = os.path.basename(input_file)
         input_name, _ = os.path.splitext(input_filename)
-        output_file = f"{input_dir}/{input_name}-{quantize_level}.gguf"
+        # output_file = f"{input_dir}/{input_name}-{quantize_level}.gguf"
+        output_file = os.path.join(input_dir, f"{input_name}-{quantize_level}.gguf")
+        # temp_file = os.path.join(input_dir, f"{input_name}-temporary.gguf")
         output_entry.delete(0, tk.END)
         output_entry.insert(0, output_file)
         scroll_entry_to_end(output_entry)
@@ -118,56 +122,73 @@ def run_llama_quantize():
     process_text.see(tk.END)
     root.update()
 
+    convert_to_gguf = True
     # Convert the input file to GGUF format
     convert_py_path = resource_path("convert.py")
     output_dir = os.path.dirname(output_file)
-    temp_gguf_file = os.path.join(output_dir, "temporary_file_during_quantization")
+    # temp_gguf_file = os.path.join(output_dir, "temporary_file_during_quantization")
+    temp_gguf_file = input_file + "_temp.gguf"
+
+    _, fext = os.path.splitext(input_file)
+    if fext.lower() == ".gguf":
+        process_text.insert(tk.END, "File is already a GGUF, no conversion needed.\n")
+        process_text.see(tk.END)
+        temp_gguf_file = input_file
+        convert_to_gguf = False
 
     # Add cleanup of existing temp file
     if os.path.exists(temp_gguf_file):
+        # try:
+        #     os.remove(temp_gguf_file)
+        #     process_text.insert(tk.END, "Cleaned up existing temporary file.\n")
+        #     process_text.see(tk.END)
+        #     root.update()
+        # except Exception as e:
+        #     process_text.insert(tk.END, f"Error cleaning up temporary file: {e}\n")
+        #     process_text.see(tk.END)
+        #     root.update()
+        #     enable_ui()
+        #     return
+        process_text.insert(tk.END, "Reusing previous temporary quantization process...\n")
+        process_text.see(tk.END)
+        convert_to_gguf = False
+    
+    if convert_to_gguf:
         try:
-            os.remove(temp_gguf_file)
-            process_text.insert(tk.END, "Cleaned up existing temporary file.\n")
-            process_text.see(tk.END)
-            root.update()
-        except Exception as e:
-            process_text.insert(tk.END, f"Error cleaning up temporary file: {e}\n")
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
+            
+            pythonpath = os.path.join(os.path.dirname(sys.executable), "python.exe")
+            process = subprocess.Popen([f"{pythonpath}", convert_py_path, "--src", input_file, "--dst", temp_gguf_file], 
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, 
+                                    bufsize=1, universal_newlines=True, startupinfo=startupinfo)
+            
+            for line in process.stdout:
+                process_text.insert(tk.END, line)
+                process_text.see(tk.END)
+                root.update()
+            
+            process.wait()
+            if process.returncode != 0:
+                raise subprocess.CalledProcessError(process.returncode, process.args)
+            
+            process_text.insert(tk.END, "Conversion completed successfully.\n")
+        except subprocess.CalledProcessError as e:
+            process_text.insert(tk.END, f"Error converting file: {e}\n")
+            process_text.insert(tk.END, f"Command: {e.cmd}\n")
+            process_text.insert(tk.END, f"Return code: {e.returncode}\n")
             process_text.see(tk.END)
             root.update()
             enable_ui()
             return
 
-    try:
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        startupinfo.wShowWindow = subprocess.SW_HIDE
-        
-        pythonpath = os.path.join(os.path.dirname(sys.executable), "python.exe")
-        process = subprocess.Popen([f"{pythonpath}", convert_py_path, "--src", input_file, "--dst", temp_gguf_file], 
-                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, 
-                                   bufsize=1, universal_newlines=True, startupinfo=startupinfo)
-        
-        for line in process.stdout:
-            process_text.insert(tk.END, line)
-            process_text.see(tk.END)
-            root.update()
-        
-        process.wait()
-        if process.returncode != 0:
-            raise subprocess.CalledProcessError(process.returncode, process.args)
-        
-        process_text.insert(tk.END, "Conversion completed successfully.\n")
-    except subprocess.CalledProcessError as e:
-        process_text.insert(tk.END, f"Error converting file: {e}\n")
-        process_text.insert(tk.END, f"Command: {e.cmd}\n")
-        process_text.insert(tk.END, f"Return code: {e.returncode}\n")
-        process_text.see(tk.END)
-        root.update()
-        enable_ui()
-        return
-
     # Quantize the converted file
-    llama_quantize_path = resource_path("llama-quantize.exe")
+    llama_quantize_path = resource_path("llama-quantize.exe", "llamacpp-flux")
+    # If not found, search llama-qantuize.exe in PATH (but will probablynot work for Flux models)
+    if not os.path.exists(llama_quantize_path):
+        llama_quantize_path=shutil.which('llama-quantize')
+
     process_text.insert(tk.END, "Starting quantization process...\n")
     process_text.see(tk.END)
     root.update()
@@ -197,10 +218,17 @@ def run_llama_quantize():
         process_text.insert(tk.END, f"Return code: {e.returncode}\n")
         process_text.see(tk.END)
         root.update()
+    except Exception as e2:
+        process_text.insert(tk.END, f"Error running llama-quantize: {e2}\n")
+        process_text.insert(tk.END, f"Command: {e2.cmd}\n")
+        process_text.insert(tk.END, f"Return code: {e2.returncode}\n")
+        process_text.see(tk.END)
+        root.update()
     finally:
-        # Clean up the temporary file
-        if os.path.exists(temp_gguf_file):
-            os.remove(temp_gguf_file)
+        if DELETE_TEMPORARY_FILES and temp_gguf_file != input_file and convert_to_gguf :
+            # Clean up the temporary file
+            if os.path.exists(temp_gguf_file):
+                os.remove(temp_gguf_file)
         
     process_text.insert(tk.END, "Quantization process completed.")
     process_text.see(tk.END)
@@ -281,7 +309,7 @@ def main():
 
     root.mainloop()
 
-def resource_path(relative_path):
+def resource_path(relative_path:str, subdirectory:str=""):
     """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
@@ -289,7 +317,12 @@ def resource_path(relative_path):
     except Exception:
         base_path = os.path.abspath(".")
 
-    return os.path.join(base_path, relative_path)
+    ret = ""
+    if len(subdirectory)>0:
+        ret = os.path.join(os.path.join(base_path, subdirectory),relative_path)
+    else:
+        ret = os.path.join(base_path, relative_path)
+    return ret 
 
 if __name__ == "__main__":
     main()
