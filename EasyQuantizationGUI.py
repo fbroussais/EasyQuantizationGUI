@@ -144,7 +144,7 @@ def run_llama_quantize():
 
     # Add cleanup of existing temp file
     if os.path.exists(temp_gguf_file):
-        process_text.insert(tk.END, "Reusing previous temporary quantization process...\n")
+        process_text.insert(tk.END, "Reusing previous temporary converted file.\n")
         process_text.see(tk.END)
         convert_to_gguf = False
 
